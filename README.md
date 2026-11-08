@@ -10,9 +10,9 @@ The previous reference is preserved in [docs/legacy-api.md](docs/legacy-api.md).
 
 ## Unofficial use and responsibility
 
-This is an independent reference, not an official DESCO API, service, or endorsement. It is provided for informational and educational purposes, as is, without warranties of accuracy, availability, fitness for a purpose, or continued compatibility. To the extent permitted by applicable law, contributors disclaim liability arising from use of this material.
+**Disclaimer:** This is an independent, unofficial project and is not affiliated with or endorsed by DESCO. The material is provided “as is,” without warranties. Users are responsible for obtaining necessary permissions and complying with applicable laws and DESCO’s terms. To the maximum extent permitted by law, the authors, maintainers, and contributors disclaim liability for claims, losses, or damages arising from use or misuse of this project. Nothing in this disclaimer excludes liability that cannot legally be excluded.
 
-Use only accounts you own or have explicit permission to access. Follow DESCO's applicable terms and access restrictions. Do not bypass authentication, enumerate account IDs, or evade rate limits. Users are responsible for their own implementation, permissions, and use. This notice is not legal advice and does not guarantee immunity from liability.
+Use only accounts you own or have explicit permission to access. Do not bypass authentication, enumerate account IDs, or evade rate limits. This notice is not legal advice and does not guarantee immunity from liability or prevent DESCO from bringing a claim.
 
 ## Where to obtain your own values
 
