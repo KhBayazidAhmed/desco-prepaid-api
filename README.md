@@ -1,281 +1,167 @@
 # DESCO Prepaid API Reference
 
-## Overview
-
-DESCO (Dhaka Electric Supply Company) exposes a public, unauthenticated API for prepaid electricity meter accounts at:
+Unofficial documentation for the authenticated [DESCO prepaid portal](https://prepaid.desco.org.bd/).
 
 **Base URL:** `https://prepaid.desco.org.bd/api`
 
-The API allows anyone to query:
-- Current balance and basic meter info
-- Customer / installation details
-- Daily consumption history (units + cost)
-- Monthly consumption history
-- Recharge / payment history
+The current portal uses username/password login, session cookies, and CSRF protection. Retrieve accounts linked to the signed-in user, then use their internal `accountId` to retrieve balances. An account number or meter number is not the `accountId`.
 
-**Important characteristics:**
-- No authentication, tokens, API keys, or login required.
-- All requests are simple `GET` requests.
-- Works by supplying the account number (from the electricity bill).
-- Two parallel backend paths exist (`unified` and `tkdes`). Most accounts respond on only one of them.
+The previous reference is preserved in [docs/legacy-api.md](docs/legacy-api.md). Those older endpoints have not been reverified; this update does not establish whether they remain available.
 
-## Meter Type Paths
+## Verification
 
-All endpoints are available under two prefixes:
+Inspected on **2026-11-08** using Ego Lite and the deployed frontend bundle `assets/index-CN7ZLy9Z.js`.
 
-- `/unified/customer/...`
-- `/tkdes/customer/...`
+- **Tested with an existing authenticated browser session:** account listing, daily balance, and realtime eligibility/last result returned HTTP 200.
+- **Tested without cookies:** daily balance returned HTTP 401 with `errorCode: "AUTHENTICATION_REQUIRED"`.
+- **Identified in frontend source only:** fresh login and realtime request/polling. These still require end-to-end validation. The Python example has local HTTP tests, but has not been tested with a fresh DESCO login.
 
-**How to choose the correct type:**
-1. Call the desired endpoint with `unified`.
-2. If `data` is `null` or the account is not found, retry with `tkdes`.
+These are undocumented portal endpoints and can change. Examples below use synthetic account numbers and balances; no credentials or session cookies are included.
 
-Some third-party tools hardcode one path (often `tkdes`).
+## Authentication flow
 
-## Authentication & Headers
+1. Create an HTTP client with a cookie jar. Keep that same jar throughout the flow.
+2. `GET /auth/csrf` to receive the `XSRF-TOKEN` cookie.
+3. URL-decode that cookie's value.
+4. `POST /auth/login` with the decoded value in `X-XSRF-TOKEN`, the cookies, and a JSON body:
+   ```json
+   {"username": "YOUR_DESCO_USERNAME", "password": "YOUR_DESCO_PASSWORD"}
+   ```
+5. Retain cookies set by the login response. Subsequent requests authenticate using those cookies.
+6. `GET /accounts`, choose a linked account, then `GET /accounts/{accountId}/balance`.
 
-None required.
+The frontend sends `Accept: application/json`, uses `credentials: "include"`, adds `Content-Type: application/json` for JSON bodies, and copies `XSRF-TOKEN` to `X-XSRF-TOKEN` on non-GET requests. This is cookie authentication, not bearer-token or API-key authentication.
 
-Minimal working request:
+`GET /auth/session` is the frontend's session-check endpoint. A protected request returning 401 requires signing in again. Session lifetime has not been measured. Do not repeatedly retry invalid credentials.
+
+First-time users should create their portal account and link their electricity account through the website. The example does not automate registration or account linking.
+
+## Daily balance
+
+### List linked accounts
+
 ```http
-GET https://prepaid.desco.org.bd/api/unified/customer/getBalance?accountNo=123456789
+GET /accounts
 ```
 
-Recommended headers (not strictly required):
-- `Accept: application/json, text/plain, */*`
-
-## Common Response Format
-
-Every successful response follows this structure:
+Response excerpt:
 
 ```json
 {
-  "code": 200,
-  "desc": "OK",
-  "data": { ... }   // object, array, or null
+  "accounts": [
+    {
+      "accountId": 123,
+      "sourceSystem": "TKDES",
+      "accountNo": "12345678",
+      "meterNo": "123456789012",
+      "status": "ACTIVE",
+      "linkStatus": "ACTIVE"
+    }
+  ]
 }
 ```
 
-- `code`: Numeric status (200 = success, other values indicate issues)
-- `desc`: Human-readable message
-- `data`: The actual payload (can be `null` for valid accounts with no data, or when the account doesn't exist on that meter type)
+Choose `accounts[].accountId`. The current flow does not require trying separate `unified` and `tkdes` URL prefixes.
 
-Common non-200 codes observed:
-- `16001` → "The Account No. does not exist"
+### Fetch balance
 
-## Endpoints
-
-### 1. Get Balance
-
-**Path:**
-```
-GET /:type/customer/getBalance?accountNo=...
+```http
+GET /accounts/123/balance
+Accept: application/json
+Cookie: <authenticated session cookies>
 ```
 
-**Query Parameters:**
-| Parameter   | Type   | Required | Description                          |
-|-------------|--------|----------|--------------------------------------|
-| `accountNo` | string | Yes      | DESCO prepaid account number         |
-| `meterNo`   | string | No       | Optional meter number (some scripts pass it) |
+Response excerpt (the object is returned directly, without the legacy `code/desc/data` wrapper):
 
-**Example:**
-```bash
-curl "https://prepaid.desco.org.bd/api/unified/customer/getBalance?accountNo=123456789"
-```
-
-**Response `data` fields (when present):**
-- `accountNo`
-- `meterNo`
-- `balance` (current balance in BDT)
-- `currentMonthConsumption`
-- `readingTime` (last reading timestamp)
-
-### 2. Get Customer Info
-
-**Path:**
-```
-GET /:type/customer/getCustomerInfo?accountNo=...
-```
-
-**Query Parameters:**
-- `accountNo` (required)
-
-**Typical `data` fields:**
-- `accountNo`, `meterNo`
-- `customerName`, `contactNo`
-- `installationAddress`, `feederName`, `SDName`
-- `installationDate`, `registerDate`
-- `phaseType`, `sanctionLoad`
-- `tariffSolution`, `meterModel`, `transformer`
-
-### 3. Daily Consumption
-
-**Path:**
-```
-GET /:type/customer/getCustomerDailyConsumption?accountNo=...&dateFrom=...&dateTo=...
-```
-
-**Query Parameters:**
-| Parameter | Type   | Required | Description                  |
-|-----------|--------|----------|------------------------------|
-| `accountNo` | string | Yes    | Account number               |
-| `dateFrom`  | string | Yes    | Start date `YYYY-MM-DD`      |
-| `dateTo`    | string | Yes    | End date `YYYY-MM-DD`        |
-
-**Response `data`:** Array of daily records.
-
-**Key fields per record:**
-- `date`
-- `consumedUnit` (kWh / units)
-- `consumedTaka` (cost in BDT)
-- `accountNo`, `meterNo`
-- `customerName`, `installationAddress`
-- `phaseType`, `sanctionLoad`, `tariffSolution`
-- `importReactiveEnergyIncrement`
-
-**Note:** The raw data is often cumulative. Callers frequently post-process it to compute daily deltas.
-
-### 4. Monthly Consumption
-
-**Path:**
-```
-GET /:type/customer/getCustomerMonthlyConsumption?accountNo=...&monthFrom=...&monthTo=...
-```
-
-**Query Parameters:**
-| Parameter | Type   | Required | Description               |
-|-----------|--------|----------|---------------------------|
-| `accountNo` | string | Yes    | Account number            |
-| `monthFrom` | string | Yes    | Start month `YYYY-MM`     |
-| `monthTo`   | string | Yes    | End month `YYYY-MM`       |
-
-**Response `data`:** Array of monthly records.
-
-**Key fields per record:**
-- `month` (`YYYY-MM`)
-- `consumedUnit`
-- `consumedTaka`
-- `maximumDemand`
-- `APF`
-- `accountNo`, `meterNo`, `customerName`, etc.
-
-### 5. Recharge History
-
-**Path:**
-```
-GET /:type/customer/getRechargeHistory?accountNo=...&dateFrom=...&dateTo=...
-```
-
-**Query Parameters:**
-| Parameter | Type   | Required | Description                  |
-|-----------|--------|----------|------------------------------|
-| `accountNo` | string | Yes    | Account number               |
-| `dateFrom`  | string | Yes    | Start date `YYYY-MM-DD`      |
-| `dateTo`    | string | Yes    | End date `YYYY-MM-DD`        |
-
-**Response `data`:** Array of recharge records.
-
-**Key fields per record:**
-- `rechargeDate`
-- `totalAmount`, `energyAmount`, `chargeAmount`
-- `VAT`
-- `rebate`
-- `orderID`, `token`, `sequence`
-- `rechargeOperator`, `orderStatus`
-- `chargeItems` (array of charge breakdowns)
-
-## Date Formats
-
-- Daily / Recharge: `YYYY-MM-DD` (e.g. `2026-05-01`)
-- Monthly: `YYYY-MM` (e.g. `2026-05`)
-
-Dates are interpreted in Asia/Dhaka timezone.
-
-## Account Number Format
-
-- Usually numeric (e.g. `123456789`)
-- Sometimes prefixed (e.g. `DESCO-123456789`)
-- Both forms are commonly accepted — test with your actual bill number.
-
-## Usage Notes & Behavior
-
-- The API returns data for any valid account number you can guess/supply.
-- `data: null` or empty array is common even on HTTP 200 when there is no data for the requested range/type.
-- Some accounts only work under `unified`, others only under `tkdes`.
-- Passing both `accountNo` and `meterNo` on the balance endpoint is supported by some tools.
-- No rate limiting is documented (use responsibly).
-- Responses can contain personal information (name, address, contact number, meter details).
-
-## Example cURL Commands
-
-```bash
-# Balance (unified)
-curl "https://prepaid.desco.org.bd/api/unified/customer/getBalance?accountNo=YOUR_ACCOUNT"
-
-# Balance (tkdes)
-curl "https://prepaid.desco.org.bd/api/tkdes/customer/getBalance?accountNo=YOUR_ACCOUNT"
-
-# Daily consumption (last 10 days example)
-curl "https://prepaid.desco.org.bd/api/unified/customer/getCustomerDailyConsumption?accountNo=YOUR_ACCOUNT&dateFrom=2026-05-20&dateTo=2026-05-30"
-
-# Monthly consumption
-curl "https://prepaid.desco.org.bd/api/tkdes/customer/getCustomerMonthlyConsumption?accountNo=YOUR_ACCOUNT&monthFrom=2025-06&monthTo=2026-05"
-
-# Recharge history
-curl "https://prepaid.desco.org.bd/api/unified/customer/getRechargeHistory?accountNo=YOUR_ACCOUNT&dateFrom=2025-01-01&dateTo=2026-05-30"
-
-# Customer info
-curl "https://prepaid.desco.org.bd/api/tkdes/customer/getCustomerInfo?accountNo=YOUR_ACCOUNT"
-```
-
-## Sample Responses
-
-### Balance (successful)
 ```json
 {
-  "code": 200,
-  "desc": "OK",
-  "data": {
-    "accountNo": "987654321",
-    "meterNo": "667788990011",
-    "balance": 1384.35,
-    "currentMonthConsumption": 2020.49,
-    "readingTime": "2022-07-19 00:00:00"
-  }
+  "accountNo": "12345678",
+  "meterNo": "123456789012",
+  "balance": 500.25,
+  "meterType": "TKDES",
+  "currency": "BDT",
+  "balanceSnapshotAt": "2026-11-08T00:00+06:00",
+  "timestampSource": "UPSTREAM",
+  "timestampAvailable": true,
+  "stale": false,
+  "currentMonthConsumedTaka": 100.50,
+  "readingTime": "2026-11-08 00:00:00"
 }
 ```
 
-### Customer Info
+The response also includes `consumerMessages` explaining the balance. This is a **daily snapshot**, not a live meter reading. A recharge may appear in recharge history before the next balance update. Check `stale`, `timestampAvailable`, and `balanceSnapshotAt`; an unavailable balance must not be treated as zero.
+
+With your own authenticated cookie jar:
+
+```sh
+curl --fail-with-body -b cookies.txt \
+  -H 'Accept: application/json' \
+  'https://prepaid.desco.org.bd/api/accounts/123/balance'
+```
+
+Replace `123` with an ID returned by your account list. The cookie jar must already contain an authenticated session.
+
+## Python example
+
+Python 3.9+; no third-party dependencies:
+
+```sh
+python3 examples/balance.py
+```
+
+The script prompts for your username and password, stores cookies only in memory, and prints the daily balance for each linked account. Password input is hidden. Keep credentials and cookies private; do not commit them or put them in URLs. For a deployed integration, keep them on the backend.
+
+Run the local tests:
+
+```sh
+python3 -m unittest discover -s tests -v
+```
+
+## Realtime balance
+
+### Check eligibility and the last result
+
+```http
+GET /accounts/realtime-balance
+```
+
+The response has `enabled` and a `meters` array. Meter entries include `accountId`, `meterNo`, `meterType`, `status`, `message`, `lastRealtimeBalance`, `lastRealtimeReceivedAt`, `nextEligibleAt`, `attemptsToday`, and `remainingAttempts`.
+
+An observed response had `status: "DAILY_LIMIT_REACHED"` despite positive `remainingAttempts`. Respect the returned status, message, and eligibility times rather than deciding from the counter alone. No new meter reading was requested during inspection because the linked meter had reached its limit.
+
+### Request a reading (source-inspected, not live-tested)
+
+```http
+POST /accounts/{accountId}/realtime-balance
+Content-Type: application/json
+X-XSRF-TOKEN: <URL-decoded XSRF-TOKEN cookie>
+Cookie: <session cookies including XSRF-TOKEN>
+```
+
+```json
+{"idempotencyKey": "<new UUID for this logical request>"}
+```
+
+The frontend generates a UUID with `crypto.randomUUID()`. If the response status is `IN_PROGRESS`, take its `requestId` and poll:
+
+```http
+GET /accounts/{accountId}/realtime-balance/{requestId}
+```
+
+URL-encode `requestId` as a path component. The frontend polls every **2 seconds**, stops when status changes, and stops waiting after **60 seconds**. Poll the GET status endpoint, not the POST endpoint. On `SUCCESS`, read `balance`, `meterNo`, and `receivedAt`.
+
+Other states handled by the frontend include `OFFLINE`, `TIMEOUT`, `UPSTREAM_FAILURE`, `COOLDOWN_ACTIVE`, `DAILY_LIMIT_REACHED`, and `UNAVAILABLE`. Respect cooldowns and daily restrictions; this example deliberately performs daily-balance GETs only.
+
+## Errors and compatibility
+
+Check HTTP status before interpreting JSON. The verified unauthenticated response was:
+
 ```json
 {
-  "code": 200,
-  "desc": "OK",
-  "data": {
-    "accountNo": "987654321",
-    "contactNo": "01833000000",
-    "customerName": "MR. JOHN DOE",
-    "feederName": "Sector 11",
-    "installationAddress": "H-42, R-7, SEC-13, UTTARA",
-    "installationDate": "2019-06-23 00:00:00",
-    "meterNo": "667788990011",
-    "phaseType": "Single Phase Meter",
-    "registerDate": "2019-06-23 00:00:00",
-    "sanctionLoad": 6,
-    "tariffSolution": "Category-A: Residential",
-    "meterModel": null,
-    "transformer": null,
-    "SDName": "Turag"
-  }
+  "errorCode": "AUTHENTICATION_REQUIRED",
+  "message": "Please sign in to continue.",
+  "correlationId": "<request correlation identifier>"
 }
 ```
 
-### Error (account not found on this type)
-```json
-{
-  "code": 16001,
-  "desc": "The Account No. does not exist",
-  "data": null
-}
-```
-
-This is the complete functional picture of the publicly accessible DESCO prepaid meter API based on observed usage across multiple independent implementations.
+Do not assume errors or successful payloads follow the legacy wrapper. An empty linked-account list requires linking an account in the portal. Other usage, summary, and recharge endpoints require separate response verification before migrating their old documentation.
