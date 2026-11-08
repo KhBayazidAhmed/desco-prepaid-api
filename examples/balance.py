@@ -60,10 +60,10 @@ def main():
         if not accounts:
             print("No linked accounts. Link your electricity account in the DESCO portal.")
             return 0
-        for account in accounts:
+        for index, account in enumerate(accounts, start=1):
             result = client.balance(account["accountId"])
             print(json.dumps({
-                "accountNo": result["accountNo"],
+                "linkedAccount": index,
                 "balance": result.get("balance"),
                 "currency": result.get("currency"),
                 "balanceSnapshotAt": result.get("balanceSnapshotAt"),
@@ -79,8 +79,8 @@ def main():
         error.close()
     except (URLError, TimeoutError):
         print("Could not reach DESCO. Check your connection and try again.", file=sys.stderr)
-    except (RuntimeError, ValueError, KeyError, TypeError) as error:
-        print(f"DESCO request failed: {error}", file=sys.stderr)
+    except (RuntimeError, ValueError, KeyError, TypeError):
+        print("DESCO request failed: missing credentials, CSRF cookie, or unexpected response format.", file=sys.stderr)
     return 1
 
 

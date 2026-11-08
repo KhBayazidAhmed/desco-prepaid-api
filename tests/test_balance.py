@@ -1,12 +1,15 @@
 """Exercise the real HTTP/cookie flow without calling DESCO."""
 
+import io
 import json
+from contextlib import redirect_stdout
+from unittest.mock import patch
 import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.error import HTTPError
 
-from examples.balance import DescoClient
+from examples.balance import DescoClient, main
 
 
 class Portal(BaseHTTPRequestHandler):
@@ -70,6 +73,28 @@ class BalanceTests(unittest.TestCase):
         self.assertEqual(result["balance"], 500.25)
         self.assertEqual(result["accountNo"], account["accountNo"])
         self.assertFalse(result["stale"])
+
+    def test_cli_omits_personal_fields(self):
+        output = io.StringIO()
+        with patch("examples.balance.DescoClient") as client_class:
+            client = client_class.return_value
+            client.accounts.return_value = [{"accountId": 123}]
+            client.balance.return_value = {
+                "accountNo": "private-account",
+                "meterNo": "private-meter",
+                "customerName": "private-name",
+                "installationAddress": "private-address",
+                "balance": 500.25,
+                "currency": "BDT",
+            }
+            with patch("builtins.input", return_value="private-user"), \
+                    patch("examples.balance.getpass.getpass", return_value="private-password"), \
+                    redirect_stdout(output):
+                self.assertEqual(main(), 0)
+        result = output.getvalue()
+        self.assertNotIn("private-", result)
+        self.assertEqual(json.loads(result)["linkedAccount"], 1)
+        self.assertEqual(json.loads(result)["balance"], 500.25)
 
     def test_missing_session_is_not_treated_as_balance(self):
         with self.assertRaises(HTTPError) as caught:

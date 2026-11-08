@@ -8,6 +8,23 @@ The current portal uses username/password login, session cookies, and CSRF prote
 
 The previous reference is preserved in [docs/legacy-api.md](docs/legacy-api.md). Those older endpoints have not been reverified; this update does not establish whether they remain available.
 
+## Unofficial use and responsibility
+
+This is an independent reference, not an official DESCO API, service, or endorsement. It is provided for informational and educational purposes, as is, without warranties of accuracy, availability, fitness for a purpose, or continued compatibility. To the extent permitted by applicable law, contributors disclaim liability arising from use of this material.
+
+Use only accounts you own or have explicit permission to access. Follow DESCO's applicable terms and access restrictions. Do not bypass authentication, enumerate account IDs, or evade rate limits. Users are responsible for their own implementation, permissions, and use. This notice is not legal advice and does not guarantee immunity from liability.
+
+## Where to obtain your own values
+
+- **Username and password:** use the credentials you created on the official [DESCO portal](https://prepaid.desco.org.bd/). Use its registration or password recovery if needed. Do not send credentials to this repository or its maintainers.
+- **Electricity account and meter numbers:** check your own bill, recharge receipt, or meter details, then link the account through the official portal.
+- **Internal `accountId`:** after signing in, read `accounts[].accountId` from `GET /api/accounts`. Use only an ID returned for your session; do not guess IDs.
+- **Session and CSRF cookies:** the example obtains and keeps these automatically. You do not need to copy them into source files or share them.
+
+The Python example runs on your machine and sends credentials directly to DESCO over HTTPS. This repository does not provide a hosted login service. The script has no telemetry, writes no credential or cookie files, and prints only a numbered account label, balance, currency, and snapshot metadata. That output is still private financial information: avoid public logs and screenshots. Python process memory is not a secure-erasure mechanism.
+
+Do not include real account IDs, account or meter numbers, names, addresses, balances, passwords, cookies, or raw API responses in issues or pull requests. Use placeholders and redact screenshots. See [PRIVACY.md](PRIVACY.md) for reporting guidance.
+
 ## Verification
 
 Inspected on **2026-11-08** using Ego Lite and the deployed frontend bundle `assets/index-CN7ZLy9Z.js`.
@@ -109,7 +126,7 @@ Python 3.9+; no third-party dependencies:
 python3 examples/balance.py
 ```
 
-The script prompts for your username and password, stores cookies only in memory, and prints the daily balance for each linked account. Password input is hidden. Keep credentials and cookies private; do not commit them or put them in URLs. For a deployed integration, keep them on the backend.
+The script prompts for your username and password, stores cookies only in memory, and prints the daily balance for each linked account without printing its account or meter number. Password input is hidden. Keep credentials and cookies private; do not commit them or put them in URLs. For a deployed integration, keep them on the backend.
 
 Run the local tests:
 

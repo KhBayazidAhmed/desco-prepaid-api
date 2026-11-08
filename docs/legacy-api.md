@@ -2,6 +2,8 @@
 
 # DESCO Prepaid API Reference
 
+All response examples below are illustrative, with personal fields replaced by placeholders. The [current privacy and use guidance](../README.md#unofficial-use-and-responsibility) applies here too.
+
 ## Overview
 
 DESCO (Dhaka Electric Supply Company) exposes a public, unauthenticated API for prepaid electricity meter accounts at:
@@ -201,7 +203,7 @@ Dates are interpreted in Asia/Dhaka timezone.
 
 ## Usage Notes & Behavior
 
-- The API returns data for any valid account number you can guess/supply.
+- Historical behavior is not authorization to access another person's data. Use only accounts you own or have explicit permission to access.
 - `data: null` or empty array is common even on HTTP 200 when there is no data for the requested range/type.
 - Some accounts only work under `unified`, others only under `tkdes`.
 - Passing both `accountNo` and `meterNo` on the balance endpoint is supported by some tools.
@@ -238,8 +240,8 @@ curl "https://prepaid.desco.org.bd/api/tkdes/customer/getCustomerInfo?accountNo=
   "code": 200,
   "desc": "OK",
   "data": {
-    "accountNo": "987654321",
-    "meterNo": "667788990011",
+    "accountNo": "YOUR_ACCOUNT_NUMBER",
+    "meterNo": "YOUR_METER_NUMBER",
     "balance": 1384.35,
     "currentMonthConsumption": 2020.49,
     "readingTime": "2022-07-19 00:00:00"
@@ -253,13 +255,13 @@ curl "https://prepaid.desco.org.bd/api/tkdes/customer/getCustomerInfo?accountNo=
   "code": 200,
   "desc": "OK",
   "data": {
-    "accountNo": "987654321",
-    "contactNo": "01833000000",
-    "customerName": "MR. JOHN DOE",
+    "accountNo": "YOUR_ACCOUNT_NUMBER",
+    "contactNo": "REDACTED_CONTACT",
+    "customerName": "REDACTED_CUSTOMER_NAME",
     "feederName": "Sector 11",
-    "installationAddress": "H-42, R-7, SEC-13, UTTARA",
+    "installationAddress": "REDACTED_ADDRESS",
     "installationDate": "2019-06-23 00:00:00",
-    "meterNo": "667788990011",
+    "meterNo": "YOUR_METER_NUMBER",
     "phaseType": "Single Phase Meter",
     "registerDate": "2019-06-23 00:00:00",
     "sanctionLoad": 6,

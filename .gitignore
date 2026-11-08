@@ -3,3 +3,6 @@ __pycache__/
 .venv/
 .env
 cookies.txt
+.env.*
+*.har
+cookies*.txt
